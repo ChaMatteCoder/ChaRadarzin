@@ -1,0 +1,46 @@
+# Segredos e configuracoes locais
+.env
+.env.*
+!.env.example
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyd
+.venv/
+venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+build/
+dist/
+*.egg-info/
+
+# Dados locais e estado de execucao
+data/*.db
+data/*.db-*
+data/*.sqlite*
+data/*.lock
+data/*.xlsx
+logs/*
+!logs/.gitkeep
+reports/*
+!reports/.gitkeep
+
+# Artefatos de desenvolvimento e inspecao
+.codex-tmp/
+outputs/
+
+# Temporarios de Office e sistema operacional
+~$*
+*.tmp
+*.temp
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# IDEs
+.idea/
+.vscode/

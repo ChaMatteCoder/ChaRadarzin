@@ -1,7 +1,10 @@
 [CmdletBinding()]
 param(
     [ValidatePattern('^([01]\d|2[0-3]):[0-5]\d$')]
-    [string]$DailyAt = "09:00",
+    [string]$DailyAt = "21:05",
+
+    [ValidateRange(0, 30)]
+    [int]$LogonDelayMinutes = 2,
 
     [ValidateNotNullOrEmpty()]
     [string]$TaskName = "Radar de Precos",
@@ -33,11 +36,19 @@ $action = New-ScheduledTaskAction `
     -Execute $windowsPowerShell `
     -Argument $actionArguments `
     -WorkingDirectory $projectRoot
-$trigger = New-ScheduledTaskTrigger -Daily -At $triggerTime
+$dailyTrigger = New-ScheduledTaskTrigger -Daily -At $triggerTime
+$logonTrigger = New-ScheduledTaskTrigger `
+    -AtLogOn `
+    -User ([Security.Principal.WindowsIdentity]::GetCurrent().Name)
+$logonTrigger.Delay = "PT${LogonDelayMinutes}M"
+$triggers = @($logonTrigger, $dailyTrigger)
 $settings = New-ScheduledTaskSettingsSet `
     -StartWhenAvailable `
     -MultipleInstances IgnoreNew `
     -RunOnlyIfNetworkAvailable `
+    -RestartCount 3 `
+    -RestartInterval (New-TimeSpan -Minutes 15) `
+    -WakeToRun `
     -AllowStartIfOnBatteries `
     -DontStopIfGoingOnBatteries `
     -ExecutionTimeLimit (New-TimeSpan -Minutes 30)
@@ -50,12 +61,17 @@ if ($Preview) {
     [pscustomobject]@{
         TaskName = $TaskName
         DailyAt = $DailyAt
+        LogonDelayMinutes = $LogonDelayMinutes
+        Triggers = "AtLogOn, Daily"
         Execute = $windowsPowerShell
         Arguments = $actionArguments
         WorkingDirectory = $projectRoot
         StartWhenAvailable = $true
         MultipleInstances = "IgnoreNew"
         RunOnlyIfNetworkAvailable = $true
+        RestartCount = 3
+        RestartIntervalMinutes = 15
+        WakeToRun = $true
         Register = $false
     }
     return
@@ -64,10 +80,10 @@ if ($Preview) {
 Register-ScheduledTask `
     -TaskName $TaskName `
     -Action $action `
-    -Trigger $trigger `
+    -Trigger $triggers `
     -Settings $settings `
     -Principal $principal `
-    -Description "Coleta diaria do Radar de Precos com frete" `
+    -Description "Coleta do ChaRadarzin ao entrar no Windows e diariamente com frete" `
     -Force | Out-Null
 
 if ($RunNow) {

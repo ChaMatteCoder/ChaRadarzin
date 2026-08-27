@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import logging
 import sys
+from datetime import datetime
 from decimal import Decimal
 from pathlib import Path
 
@@ -19,6 +20,7 @@ from app.notifications import (
     TelegramError,
     evaluate_alert,
     format_price_alert,
+    format_run_summary,
     format_test_message,
 )
 from app.report import write_report
@@ -28,6 +30,10 @@ from app.spreadsheet import load_catalog
 
 
 LOGGER = logging.getLogger("radar_precos")
+
+
+class SummaryNotificationError(RuntimeError):
+    pass
 
 
 def _configure_logging(log_file: Path) -> None:
@@ -126,11 +132,31 @@ def _notify_relevant_changes(
             )
 
 
+def _notify_run_summary(
+    database: RadarDatabase,
+    run_id: int,
+    summaries: tuple[ProductSummary, ...],
+    settings: Settings,
+) -> str | None:
+    try:
+        _telegram_client(settings).send_message(
+            format_run_summary(summaries, datetime.now().astimezone())
+        )
+        LOGGER.info("Resumo da execucao enviado ao Telegram")
+        return None
+    except (TelegramError, ValueError) as exc:
+        message = str(exc)
+        database.record_error(run_id, "telegram/resumo", message)
+        LOGGER.warning("Falha ao enviar resumo da execucao ao Telegram: %s", message)
+        return message
+
+
 def run(
     input_file: str | Path | None = None,
     *,
     simulate: bool = False,
     with_shipping: bool = False,
+    notify_summary: bool = False,
     product_ids: set[str] | None = None,
 ) -> Path:
     settings = get_settings(input_file)
@@ -271,6 +297,9 @@ def run(
             include_shipping=include_shipping,
             analytics_by_product=analytics_by_product,
         )
+        summary_error = None
+        if notify_summary and settings.telegram_notifications_enabled:
+            summary_error = _notify_run_summary(database, run_id, summaries, settings)
         if (
             not simulate
             and with_shipping
@@ -292,7 +321,13 @@ def run(
             observations_count=saved_count,
         )
         LOGGER.info("Execucao concluida. Relatorio: %s", report_path)
+        if summary_error is not None:
+            raise SummaryNotificationError(
+                "Coleta concluida, mas o resumo do Telegram nao foi entregue"
+            )
         return report_path
+    except SummaryNotificationError:
+        raise
     except Exception as exc:
         LOGGER.exception("Falha na execucao")
         database.record_error(run_id, "pipeline", str(exc))
@@ -324,6 +359,11 @@ def _parser() -> argparse.ArgumentParser:
         help="Consulta o CEP do .env e compara produto + frete",
     )
     parser.add_argument(
+        "--notify-summary",
+        action="store_true",
+        help="Envia ao Telegram um resumo ao concluir a coleta",
+    )
+    parser.add_argument(
         "--test-telegram",
         action="store_true",
         help="Envia uma mensagem de teste usando as credenciais do .env",
@@ -350,6 +390,7 @@ def main() -> int:
                 args.input,
                 simulate=args.simulate,
                 with_shipping=args.with_shipping,
+                notify_summary=args.notify_summary,
                 product_ids=set(args.product) if args.product else None,
             )
     except AlreadyRunningError as exc:

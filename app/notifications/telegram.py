@@ -4,6 +4,7 @@ import json
 import re
 import time
 from collections.abc import Callable
+from datetime import datetime
 from decimal import Decimal
 from html import escape
 from typing import Any
@@ -155,3 +156,36 @@ def format_price_alert(summary: ProductSummary, decision: AlertDecision) -> str:
 
 def format_test_message() -> str:
     return "✅ <b>Radar de Preços conectado</b>\n\nAs notificações do Telegram estão funcionando."
+
+
+def format_run_summary(
+    summaries: tuple[ProductSummary, ...], completed_at: datetime
+) -> str:
+    footer = [
+        "",
+        "Os alertas de preço continuam ativos para mudanças relevantes.",
+    ]
+    lines = [
+        "✅ <b>RADAR ATUALIZADO</b>",
+        completed_at.astimezone().strftime("%d/%m/%Y às %H:%M"),
+        "",
+    ]
+    for summary in summaries:
+        offer = summary.best_offer
+        product_name = escape(summary.product.name)
+        if offer is None or summary.best_price is None:
+            product_lines = [
+                f"• <b>{product_name}</b>",
+                "  Sem oferta comparável nesta consulta.",
+            ]
+        else:
+            product_lines = [
+                f"• <b>{product_name}</b>",
+                f"  Total: <b>{_money(summary.best_price)}</b> — {escape(offer.store)}",
+                f'  <a href="{escape(offer.url, quote=True)}">Abrir melhor oferta</a>',
+            ]
+        if len("\n".join([*lines, *product_lines, *footer])) > 4096:
+            lines.append("• Outros produtos foram omitidos pelo limite da mensagem.")
+            break
+        lines.extend(product_lines)
+    return "\n".join([*lines, *footer])

@@ -24,6 +24,7 @@ data/*.db-*
 data/*.sqlite*
 data/*.lock
 data/*.xlsx
+data/scheduler_last_success.txt
 logs/*
 !logs/.gitkeep
 reports/*

@@ -25,8 +25,8 @@ alertas no Telegram e análises conservadoras.
 - escolhe a melhor oferta pelo total **produto + frete**;
 - armazena execuções e observações em SQLite;
 - gera relatório Markdown com diagnóstico dos links;
-- executa diariamente pelo Agendador de Tarefas do Windows;
-- envia alertas relevantes pelo Telegram sem notificar em toda execução;
+- executa ao entrar no Windows e mantém uma verificação diária de segurança;
+- envia um resumo das execuções automáticas e alertas relevantes pelo Telegram;
 - calcula estatísticas, tendência, volatilidade, sazonalidade e previsão somente
   quando existe histórico suficiente.
 
@@ -168,7 +168,11 @@ Oscilações menores ficam somente no SQLite. Quando várias regras são acionad
 os motivos são consolidados na mensagem da melhor oferta; não há um alerta por
 loja.
 
-## Automação diária no Windows
+As execuções iniciadas pelo Agendador também enviam um resumo curto com a melhor
+oferta válida de cada produto. Esse resumo operacional é independente dos
+alertas de preço e pode ser solicitado manualmente com `--notify-summary`.
+
+## Automação no Windows
 
 Valide os caminhos primeiro:
 
@@ -181,18 +185,25 @@ Visualize a configuração sem registrar a tarefa:
 
 ```powershell
 powershell.exe -NoProfile -ExecutionPolicy Bypass `
-  -File scripts\install_scheduled_task.ps1 -DailyAt 09:00 -Preview
+  -File scripts\install_scheduled_task.ps1 -DailyAt 21:05 -Preview
 ```
 
-Registre a tarefa diária:
+Registre a tarefa:
 
 ```powershell
 powershell.exe -NoProfile -ExecutionPolicy Bypass `
-  -File scripts\install_scheduled_task.ps1 -DailyAt 09:00
+  -File scripts\install_scheduled_task.ps1 -DailyAt 21:05
 ```
 
-A tarefa aguarda a rede, executa assim que possível quando um horário for perdido
-e impede instâncias simultâneas.
+A tarefa espera 2 minutos após o login para a rede estabilizar e também mantém
+uma execução diária às 21:05 caso o computador já esteja ligado. Ela aguarda a
+rede, executa assim que possível quando um horário for perdido, desperta o
+computador quando permitido pelo Windows, tenta novamente até três vezes e
+impede instâncias simultâneas.
+
+O arquivo `logs/scheduler.log` registra início, término e código de saída sem
+armazenar CEP ou credenciais. Execuções repetidas em menos de seis horas são
+ignoradas para evitar coleta e mensagem duplicadas.
 
 ## Análises e previsões
 

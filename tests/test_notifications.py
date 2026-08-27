@@ -15,7 +15,12 @@ from app.alerts import (
     evaluate_alert,
 )
 from app.models import OfferObservation, Product, ProductSummary
-from app.notifications import TelegramClient, format_price_alert, format_test_message
+from app.notifications import (
+    TelegramClient,
+    format_price_alert,
+    format_run_summary,
+    format_test_message,
+)
 
 
 def summary() -> ProductSummary:
@@ -94,6 +99,32 @@ class TelegramNotificationTest(unittest.TestCase):
         self.assertEqual(captured["method"], "POST")
         self.assertEqual(captured["payload"]["chat_id"], "987654321")
         self.assertEqual(captured["payload"]["parse_mode"], "HTML")
+
+    def test_formats_successful_run_summary(self) -> None:
+        message = format_run_summary(
+            (summary(),),
+            datetime(2026, 8, 27, 21, 5).astimezone(),
+        )
+
+        self.assertIn("RADAR ATUALIZADO", message)
+        self.assertIn("Monitor AOC &amp; Gamer", message)
+        self.assertIn("Total: <b>R$ 900,00</b>", message)
+        self.assertIn("Abrir melhor oferta", message)
+        self.assertIn("a=1&amp;b=2", message)
+
+    def test_run_summary_reports_product_without_comparable_offer(self) -> None:
+        item = summary()
+        unavailable = ProductSummary(
+            product=item.product,
+            best_offer=None,
+            previous_best_total=item.previous_best_total,
+            historical_low=item.historical_low,
+            include_shipping=True,
+        )
+
+        message = format_run_summary((unavailable,), datetime.now().astimezone())
+
+        self.assertIn("Sem oferta comparável", message)
 
     def test_ignores_price_changes_below_one_percent(self) -> None:
         item = summary()

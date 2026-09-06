@@ -1,0 +1,81 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  quality-and-restore:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: chadaradzin
+          POSTGRES_USER: chadaradzin
+          POSTGRES_PASSWORD: ci-only-password
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U chadaradzin -d chadaradzin"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    env:
+      CHADARADZIN_ENV: staging
+      DJANGO_DEBUG: "false"
+      DJANGO_SECRET_KEY: ci-only-secret-key-that-is-long-and-never-used-outside-ci
+      DJANGO_ALLOWED_HOSTS: localhost,127.0.0.1
+      DJANGO_CSRF_TRUSTED_ORIGINS: https://example.test
+      DJANGO_SECURE_SSL_REDIRECT: "false"
+      PUBLIC_BASE_URL: https://example.test
+      DATABASE_URL: postgresql://chadaradzin:ci-only-password@127.0.0.1:5432/chadaradzin
+      TELEGRAM_OIDC_ENABLED: "false"
+      TELEGRAM_MANAGER_ENABLED: "false"
+      BETA_ACCESS_REQUIRED: "false"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: pip
+      - name: Install dependencies and PostgreSQL client
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes postgresql-client
+          python -m pip install --requirement requirements.txt
+          python -m pip check
+      - name: Validate Django and migrations
+        run: |
+          DJANGO_SECURE_SSL_REDIRECT=true python manage.py check --deploy --fail-level WARNING
+          python manage.py makemigrations --check --dry-run
+          python manage.py migrate --noinput
+          python manage.py collectstatic --noinput
+      - name: Run test suites
+        run: |
+          python manage.py test tenancy monitoring telegram_bots -v 1
+          python -m unittest discover -s tests -v
+          python -m compileall -q app chadaradzin monitoring telegram_bots tenancy tests
+      - name: Exercise backup and restore
+        run: |
+          python manage.py shell -c "from tenancy.models import Tenant; Tenant.objects.create(name='ci-restore-probe')"
+          python manage.py backup_database --output backups/ci.dump --force
+          python manage.py shell -c "from tenancy.models import Tenant; Tenant.objects.filter(name='ci-restore-probe').delete()"
+          python manage.py restore_database backups/ci.dump --confirm
+          python manage.py shell -c "from tenancy.models import Tenant; assert Tenant.objects.filter(name='ci-restore-probe').exists()"
+          python manage.py operational_status --json
+
+  container-build:
+    runs-on: ubuntu-latest
+    needs: quality-and-restore
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build production image
+        run: docker build --tag chadaradzin:ci .

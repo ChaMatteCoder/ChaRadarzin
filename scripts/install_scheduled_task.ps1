@@ -30,7 +30,10 @@ if (-not (Test-Path -LiteralPath $windowsPowerShell)) {
 $triggerTime = [DateTime]::Today.Add(
     [TimeSpan]::ParseExact($DailyAt, "hh\:mm", [Globalization.CultureInfo]::InvariantCulture)
 )
-$actionArguments = "-NoProfile -NonInteractive -ExecutionPolicy Bypass -File `"$runnerPath`""
+$actionArguments = (
+    "-NoProfile -NonInteractive -ExecutionPolicy Bypass " +
+    "-File `"$runnerPath`" -DailyAt $DailyAt"
+)
 
 $action = New-ScheduledTaskAction `
     -Execute $windowsPowerShell `
@@ -51,7 +54,7 @@ $settings = New-ScheduledTaskSettingsSet `
     -WakeToRun `
     -AllowStartIfOnBatteries `
     -DontStopIfGoingOnBatteries `
-    -ExecutionTimeLimit (New-TimeSpan -Minutes 30)
+    -ExecutionTimeLimit (New-TimeSpan -Hours 2)
 $principal = New-ScheduledTaskPrincipal `
     -UserId ([Security.Principal.WindowsIdentity]::GetCurrent().Name) `
     -LogonType Interactive `
@@ -83,7 +86,7 @@ Register-ScheduledTask `
     -Trigger $triggers `
     -Settings $settings `
     -Principal $principal `
-    -Description "Coleta do ChaRadarzin ao entrar no Windows e diariamente com frete" `
+    -Description "Scheduler e worker da coleta diaria compartilhada do ChaRadarzin" `
     -Force | Out-Null
 
 if ($RunNow) {

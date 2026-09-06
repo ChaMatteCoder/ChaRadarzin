@@ -1,0 +1,97 @@
+name: chadaradzin
+
+x-app-environment: &app-environment
+  DATABASE_URL: postgresql://chadaradzin:${POSTGRES_PASSWORD}@db:5432/chadaradzin
+  CHADARADZIN_ENV: ${CHADARADZIN_ENV:-development}
+  DJANGO_DEBUG: ${DJANGO_DEBUG:-sim}
+  DJANGO_SECRET_KEY: ${DJANGO_SECRET_KEY}
+  DJANGO_ALLOWED_HOSTS: ${DJANGO_ALLOWED_HOSTS:-localhost,127.0.0.1}
+  DJANGO_CSRF_TRUSTED_ORIGINS: ${DJANGO_CSRF_TRUSTED_ORIGINS:-}
+  DJANGO_SECURE_SSL_REDIRECT: ${DJANGO_SECURE_SSL_REDIRECT:-nao}
+  DJANGO_TRUST_PROXY_HEADERS: ${DJANGO_TRUST_PROXY_HEADERS:-nao}
+  PUBLIC_BASE_URL: ${PUBLIC_BASE_URL:-http://127.0.0.1:8000}
+
+x-app-service: &app-service
+  build:
+    context: .
+  image: ${CHADARADZIN_IMAGE:-chadaradzin}:${CHADARADZIN_IMAGE_TAG:-local}
+  env_file:
+    - ${CHADARADZIN_ENV_FILE:-.env.compose}
+  restart: unless-stopped
+  volumes:
+    - ./backups:/app/backups
+
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: chadaradzin
+      POSTGRES_USER: chadaradzin
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U chadaradzin -d chadaradzin"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+  web:
+    <<: *app-service
+    environment:
+      <<: *app-environment
+      MIGRATE_ON_STARTUP: sim
+      COLLECTSTATIC_ON_STARTUP: sim
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      - "${APP_PORT:-8000}:8000"
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - "import urllib.request; request = urllib.request.Request('http://127.0.0.1:8000/health/ready/', headers={'X-Forwarded-Proto': 'https'}); urllib.request.urlopen(request, timeout=3)"
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+
+  worker:
+    <<: *app-service
+    command: ["python", "manage.py", "run_collection_worker"]
+    environment:
+      <<: *app-environment
+      MIGRATE_ON_STARTUP: nao
+      COLLECTSTATIC_ON_STARTUP: nao
+    depends_on:
+      web:
+        condition: service_healthy
+
+  scheduler:
+    <<: *app-service
+    command: ["python", "manage.py", "run_collection_scheduler"]
+    environment:
+      <<: *app-environment
+      MIGRATE_ON_STARTUP: nao
+      COLLECTSTATIC_ON_STARTUP: nao
+    depends_on:
+      web:
+        condition: service_healthy
+
+  monitor:
+    <<: *app-service
+    command:
+      ["python", "manage.py", "run_operational_monitor", "--fail-on", "critical"]
+    environment:
+      <<: *app-environment
+      MIGRATE_ON_STARTUP: nao
+      COLLECTSTATIC_ON_STARTUP: nao
+    depends_on:
+      web:
+        condition: service_healthy
+
+volumes:
+  postgres_data:

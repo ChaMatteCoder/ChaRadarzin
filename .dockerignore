@@ -1,0 +1,15 @@
+.git
+.github
+.env
+.env.*
+.venv
+__pycache__
+*.pyc
+backups
+data
+logs
+reports
+staticfiles
+outputs
+.codex-tmp
+produtos.xlsx

@@ -2,6 +2,8 @@
 .env
 .env.*
 !.env.example
+!.env.compose.example
+!.env.staging.example
 
 # Python
 __pycache__/
@@ -17,6 +19,8 @@ htmlcov/
 build/
 dist/
 *.egg-info/
+staticfiles/*
+!staticfiles/.gitkeep
 
 # Dados locais e estado de execucao
 data/*.db
@@ -29,6 +33,8 @@ logs/*
 !logs/.gitkeep
 reports/*
 !reports/.gitkeep
+backups/*
+!backups/.gitkeep
 
 # Artefatos de desenvolvimento e inspecao
 .codex-tmp/

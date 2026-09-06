@@ -1,0 +1,76 @@
+{% extends "base.html" %}
+{% load monitoring_extras %}
+{% block title %}Painel — ChaRadarzin{% endblock %}
+{% block content %}
+  <section class="dashboard-heading">
+    <div>
+      <p class="eyebrow">Seu espaço privado</p>
+      <h1>{{ user.tenant.name }}</h1>
+      <p>Produtos, preferências e conexão com o Telegram em um só lugar.</p>
+    </div>
+    <div class="inline-actions">
+      <a class="secondary-button" href="{% url 'delivery-settings' %}">Preferências</a>
+      <a class="primary-button" href="{% url 'product-new' %}">Adicionar produto</a>
+    </div>
+  </section>
+
+  <section class="metric-grid" aria-label="Resumo">
+    <article><strong>{{ products|length }}</strong><span>produtos no radar</span></article>
+    <article>
+      <strong>{% if delivery_profile %}{{ delivery_profile.postal_code|cep }}{% else %}Pendente{% endif %}</strong>
+      <span>CEP de entrega</span>
+    </article>
+    <article><strong>{% if personal_bot %}{{ personal_bot.get_status_display }}{% else %}Pendente{% endif %}</strong><span>bot pessoal</span></article>
+  </section>
+
+  <section class="bot-callout">
+    <div>
+      <p class="eyebrow">Telegram pessoal</p>
+      {% if personal_bot %}
+        <h2>@{{ personal_bot.username }}</h2>
+        <p>Seu bot está {{ personal_bot.get_status_display|lower }}. Credenciais nunca aparecem no painel.</p>
+      {% else %}
+        <h2>Leve o radar para o Telegram</h2>
+        <p>Crie seu bot pessoal em poucos passos, sem copiar ou colar token.</p>
+      {% endif %}
+    </div>
+    <a class="secondary-button" href="{% url 'bot-status' %}">{% if personal_bot %}Ver conexão{% else %}Conectar bot{% endif %}</a>
+  </section>
+
+  <section class="panel-section">
+    <div class="section-heading">
+      <div><p class="eyebrow">Monitoramentos</p><h2>Seus produtos</h2></div>
+      <a class="text-link" href="{% url 'product-new' %}">+ Novo link exato</a>
+    </div>
+    {% if products %}
+      <div class="product-list">
+        {% for product in products %}
+          <article class="product-card product-card-rich">
+            <div class="product-main">
+              <span class="status-badge tone-{{ product.collection_state.tone }}">{{ product.collection_state.label }}</span>
+              <h3><a href="{% url 'product-detail-page' product.id %}">{{ product.name }}</a></h3>
+              <p>{{ product.exact_model|default:"Modelo não informado" }}{% if product.variant %} · {{ product.variant }}{% endif %}</p>
+            </div>
+            <div class="product-meta">
+              {% if product.history.best_offer %}
+                <span class="product-current-price">{{ product.history.best_offer.total_price_cents|brl_cents }}<small>melhor total</small></span>
+                <span class="product-variation{% if product.history.variation_percent < 0 %} is-down{% elif product.history.variation_percent > 0 %} is-up{% endif %}">{% if product.history.variation_percent is not None %}{{ product.history.variation_percent|floatformat:1 }}%{% else %}—{% endif %}<small>vs. dia anterior</small></span>
+              {% else %}
+                <span>{{ product.source_count }} fonte{{ product.source_count|pluralize }}</span>
+                <span>Alvo {{ product.target_price_cents|brl_cents }}</span>
+              {% endif %}
+              <a class="card-arrow" href="{% url 'product-detail-page' product.id %}" aria-label="Abrir {{ product.name }}">→</a>
+            </div>
+          </article>
+        {% endfor %}
+      </div>
+    {% else %}
+      <div class="empty-state">
+        <span aria-hidden="true">◎</span>
+        <h3>Seu radar começa com um link</h3>
+        <p>Cole a URL exata da oferta. Nós mostramos uma prévia para você confirmar produto, modelo, variante e vendedor.</p>
+        <a class="primary-button" href="{% url 'product-new' %}">Adicionar primeiro produto</a>
+      </div>
+    {% endif %}
+  </section>
+{% endblock %}

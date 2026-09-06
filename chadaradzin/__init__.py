@@ -1,0 +1,1 @@
+"""Configuracao web do ChaRadarzin."""

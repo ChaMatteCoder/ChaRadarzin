@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+{% load monitoring_extras %}
+{% block title %}Preferências — ChaRadarzin{% endblock %}
+{% block content %}
+  <section class="form-page-heading">
+    <a class="back-link" href="{% url 'dashboard' %}">← Voltar ao painel</a>
+    <p class="eyebrow">Configuração individual</p>
+    <h1>Seu jeito de comparar.</h1>
+    <p>Frete, pagamento e alertas são calculados por conta e nunca compartilhados com outros radares.</p>
+  </section>
+  <section class="form-layout settings-layout">
+    <form method="post" class="form-card stacked-form" novalidate>
+      {% csrf_token %}
+      {% include "monitoring/_form_fields.html" with form=form %}
+      <button class="primary-button" type="submit">Salvar preferências</button>
+    </form>
+    <aside class="guidance-card privacy-guidance">
+      <p class="eyebrow">Privacidade por padrão</p>
+      <h2>Guardamos somente o necessário</h2>
+      <ul>
+        <li>CEP com oito dígitos para cotação de frete.</li>
+        <li>Nenhum endereço completo ou número do imóvel.</li>
+        <li>Nenhum cartão, senha ou dado de pagamento.</li>
+        <li>Preferências podem ser alteradas a qualquer momento.</li>
+      </ul>
+      {% if profile %}<div class="saved-profile"><span>Perfil atual</span><strong>{{ profile.postal_code|cep }} · {{ profile.get_preferred_payment_method_display }}</strong></div>{% endif %}
+    </aside>
+  </section>
+{% endblock %}

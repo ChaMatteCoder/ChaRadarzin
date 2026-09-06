@@ -11,6 +11,80 @@ from app.models import OfferObservation
 
 
 class DatabaseTest(unittest.TestCase):
+    def test_ignores_failed_runs_but_can_include_the_current_run(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            database = RadarDatabase(Path(directory) / "test.db")
+            database.initialize()
+
+            successful = database.start_run("REAL_SHIPPING", "input.xlsx")
+            database.save_observations(successful, [self._observation("100.00")])
+            database.finish_run(successful, status="SUCCESS", observations_count=1)
+
+            failed = database.start_run("REAL_SHIPPING", "input.xlsx")
+            database.save_observations(failed, [self._observation("50.00")])
+            database.finish_run(failed, status="FAILED", observations_count=1)
+
+            current = database.start_run("REAL_SHIPPING", "input.xlsx")
+            database.save_observations(current, [self._observation("80.00")])
+
+            self.assertEqual(
+                database.historical_low("TEST001", mode="REAL_SHIPPING"),
+                Decimal("100"),
+            )
+            self.assertEqual(
+                database.historical_low(
+                    "TEST001",
+                    mode="REAL_SHIPPING",
+                    current_run_id=current,
+                ),
+                Decimal("80"),
+            )
+            self.assertEqual(
+                database.previous_best_total(
+                    "TEST001",
+                    current,
+                    mode="REAL_SHIPPING",
+                ),
+                Decimal("100"),
+            )
+
+    def test_stock_state_skips_collection_failures(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            database = RadarDatabase(Path(directory) / "test.db")
+            database.initialize()
+
+            unavailable_run = database.start_run("REAL_SHIPPING", "input.xlsx")
+            database.save_observations(
+                unavailable_run,
+                [self._observation("100.00", in_stock=False, status="OUT_OF_STOCK")],
+            )
+            database.finish_run(
+                unavailable_run,
+                status="SUCCESS",
+                observations_count=1,
+            )
+
+            failed_collection_run = database.start_run("REAL_SHIPPING", "input.xlsx")
+            database.save_observations(
+                failed_collection_run,
+                [self._observation("100.00", in_stock=False, status="PARSE_ERROR")],
+            )
+            database.finish_run(
+                failed_collection_run,
+                status="SUCCESS",
+                observations_count=1,
+            )
+
+            current = database.start_run("REAL_SHIPPING", "input.xlsx")
+
+            self.assertFalse(
+                database.previous_product_stock_state(
+                    "TEST001",
+                    current,
+                    mode="REAL_SHIPPING",
+                )
+            )
+
     def test_preserves_historical_low_and_previous_run(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             database = RadarDatabase(Path(directory) / "test.db")
@@ -37,7 +111,12 @@ class DatabaseTest(unittest.TestCase):
             database.save_observations(real, [self._observation("100.00")])
 
             self.assertEqual(
-                database.historical_low("TEST001", mode="REAL"), Decimal("100")
+                database.historical_low(
+                    "TEST001",
+                    mode="REAL",
+                    current_run_id=real,
+                ),
+                Decimal("100"),
             )
 
     def test_tracks_failed_and_sent_notification_attempts(self) -> None:

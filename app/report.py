@@ -44,7 +44,7 @@ def build_markdown_report(
 ) -> str:
     is_simulation = mode == "SIMULATION"
     lines = [
-        f"# Radar de Precos — {'Relatorio simulado' if is_simulation else 'Coleta real'}",
+        f"# ChaRadarzin — {'Relatorio simulado' if is_simulation else 'Coleta real'}",
         "",
         f"Gerado em: {generated_at.astimezone().strftime('%d/%m/%Y %H:%M:%S %Z')}",
         "",

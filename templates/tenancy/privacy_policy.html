@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+{% block title %}Privacidade — ChaRadarzin{% endblock %}
+{% block content %}
+<section class="page-shell prose-card">
+  <p class="eyebrow">PRIVACIDADE</p>
+  <h1>Seus dados servem ao seu radar.</h1>
+  <p>O ChaRadarzin é um projeto pessoal em beta fechado. Ele guarda somente os dados necessários para autenticar sua conta, acompanhar os produtos escolhidos e entregar alertas.</p>
+
+  <h2>Dados utilizados</h2>
+  <p>Identidade pública do Telegram, identificadores técnicos de conta e conversa, CEP de entrega, preferências, links de produtos, histórico de coleta e a credencial criptografada do bot pessoal.</p>
+
+  <h2>Finalidade e compartilhamento</h2>
+  <p>Os dados são usados para login, coleta de preço e frete, painel e notificações. O Telegram recebe dados necessários às mensagens e autenticação; as lojas recebem as consultas necessárias à coleta. Os dados não são vendidos.</p>
+
+  <h2>Retenção e segurança</h2>
+  <p>Recibos técnicos, sessões encerradas e prévias expiram conforme a rotina operacional. Eventos de segurança são mantidos por mais tempo para investigação. Backups operacionais podem conservar dados excluídos por até 30 dias e só são usados para recuperação.</p>
+
+  <h2>Exclusão</h2>
+  <p>Uma pessoa autenticada pode excluir sua conta pelo link no rodapé. A exclusão remove dados locais do tenant, identidade, produtos, histórico e credencial criptografada. O bot continua pertencendo à pessoa no Telegram.</p>
+  {% if user.is_authenticated %}<p><a class="danger-button" href="{% url 'delete-account' %}">Excluir minha conta</a></p>{% endif %}
+</section>
+{% endblock %}

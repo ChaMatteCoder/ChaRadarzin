@@ -1,0 +1,95 @@
+{% extends "base.html" %}
+{% block title %}Bot pessoal — ChaRadarzin{% endblock %}
+{% block content %}
+  <section class="dashboard-heading bot-heading">
+    <div>
+      <a class="back-link" href="{% url 'dashboard' %}">← Voltar ao painel</a>
+      <p class="eyebrow">Telegram pessoal</p>
+      <h1>Seu bot, seu radar.</h1>
+      <p>O ChaRadarzin configura a conexão. Você não precisa copiar nem guardar token.</p>
+    </div>
+    {% if bot %}<span class="status-pill status-{{ bot.status|lower }}">{{ bot.get_status_display }}</span>{% endif %}
+  </section>
+
+  {% if bot %}
+    <section class="connection-grid">
+      <article class="connection-card connection-primary">
+        <span class="bot-avatar" aria-hidden="true">C</span>
+        <div>
+          <p class="eyebrow">Bot associado</p>
+          <h2>@{{ bot.username }}</h2>
+          <p>{{ bot.display_name }}</p>
+        </div>
+      </article>
+      <article class="connection-card">
+        <p class="eyebrow">Proteção</p>
+        <h3>{% if bot.access_restricted %}Somente proprietário{% else %}Filtro interno ativo{% endif %}</h3>
+        <p>Comandos de outros usuários são ignorados e registrados como evento de segurança.</p>
+      </article>
+    </section>
+
+    {% if bot.status == "AWAITING_START" %}
+      <section class="activation-step">
+        <span>Último passo</span>
+        <div><h2>Ative a conversa</h2><p>Abra o bot no Telegram e envie <code>/start</code>. O status muda automaticamente.</p></div>
+        <a class="primary-button" href="https://t.me/{{ bot.username }}" rel="noopener">Abrir @{{ bot.username }}</a>
+      </section>
+    {% elif bot.status == "ACTIVE" %}
+      <section class="activation-step is-complete">
+        <span>Pronto</span>
+        <div><h2>Radar conectado</h2><p>Alertas e comandos agora usam sua conversa privada.</p></div>
+        <a class="primary-button" href="https://t.me/{{ bot.username }}" rel="noopener">Conversar com o bot</a>
+      </section>
+    {% elif bot.status == "BLOCKED" or bot.status == "REVOKED" or bot.status == "OWNER_CHANGED" or bot.status == "ERROR" or bot.status == "WEBHOOK_ERROR" %}
+      <section class="activation-step has-error">
+        <span>Atenção</span>
+        <div><h2>A conexão precisa ser refeita</h2><p>O painel detectou bloqueio, revogação ou uma mudança incompatível. Desconecte e crie uma associação nova.</p></div>
+      </section>
+    {% endif %}
+
+    <section class="panel-section compact-section">
+      <div class="section-heading">
+        <div><p class="eyebrow">Controle local</p><h2>Desconectar bot</h2></div>
+      </div>
+      <p class="section-copy">Remove o webhook e apaga a credencial criptografada deste servidor. O bot continua pertencendo a você no Telegram.</p>
+      <form method="post" action="{% url 'bot-disconnect' %}">
+        {% csrf_token %}
+        <button class="danger-button" type="submit">Desconectar com segurança</button>
+      </form>
+    </section>
+  {% elif onboarding and onboarding.is_open %}
+    <section class="activation-step">
+      <span>Em andamento</span>
+      <div>
+        <h2>Finalize no Telegram</h2>
+        <p>O link abre o fluxo oficial com o nome e o username já preenchidos. A associação acontece pelo seu ID autenticado.</p>
+      </div>
+      {% if deep_link %}<a class="primary-button" href="{{ deep_link }}" rel="noopener">Continuar no Telegram</a>{% endif %}
+    </section>
+  {% else %}
+    <section class="onboarding-layout">
+      <article class="onboarding-copy">
+        <p class="eyebrow">Como funciona</p>
+        <ol class="step-list">
+          <li><span>1</span><div><strong>Escolha o nome</strong><p>Nós sugerimos opções exclusivas para seu radar.</p></div></li>
+          <li><span>2</span><div><strong>Confirme no Telegram</strong><p>O fluxo oficial cria o bot já vinculado à sua conta.</p></div></li>
+          <li><span>3</span><div><strong>Envie /start</strong><p>Isso confirma sua conversa privada para os alertas.</p></div></li>
+        </ol>
+      </article>
+      <article class="onboarding-form-card">
+        <p class="eyebrow">Criar bot pessoal</p>
+        {% if manager_enabled %}
+          <form method="post" action="{% url 'bot-create' %}" class="stacked-form">
+            {% csrf_token %}
+            <label>Nome visível <input name="name" maxlength="64" placeholder="ChaRadarzin de Ana"></label>
+            <label>Username <span class="input-prefix">@</span><input name="username" maxlength="32" placeholder="ChaRadarAnaBot"></label>
+            <button class="primary-button" type="submit">Criar pelo Telegram</button>
+          </form>
+          <p class="privacy-note">O token é entregue de forma automática pelo Telegram, criptografado antes de ser salvo e nunca exibido.</p>
+        {% else %}
+          <div class="unavailable-note"><strong>Integração em configuração</strong><p>O bot gerenciador ainda não foi habilitado neste ambiente.</p></div>
+        {% endif %}
+      </article>
+    </section>
+  {% endif %}
+{% endblock %}

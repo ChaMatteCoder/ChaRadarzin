@@ -155,7 +155,7 @@ def format_price_alert(summary: ProductSummary, decision: AlertDecision) -> str:
 
 
 def format_test_message() -> str:
-    return "✅ <b>Radar de Preços conectado</b>\n\nAs notificações do Telegram estão funcionando."
+    return "✅ <b>ChaRadarzin conectado</b>\n\nAs notificações do Telegram estão funcionando."
 
 
 def format_run_summary(

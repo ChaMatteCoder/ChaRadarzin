@@ -2,8 +2,10 @@ from __future__ import annotations
 
 import json
 import unittest
+from dataclasses import replace
 from datetime import datetime
 from decimal import Decimal
+from pathlib import Path
 
 from app.alerts import (
     BACK_IN_STOCK,
@@ -20,6 +22,16 @@ from app.notifications import (
     format_price_alert,
     format_run_summary,
     format_test_message,
+)
+
+
+PRICE_SCENARIOS = json.loads(
+    (
+        Path(__file__).resolve().parent
+        / "fixtures"
+        / "prices"
+        / "alert_scenarios.json"
+    ).read_text(encoding="utf-8")
 )
 
 
@@ -56,7 +68,51 @@ def summary() -> ProductSummary:
     )
 
 
+def summary_for_prices(current: str, previous: str | None) -> ProductSummary:
+    item = summary()
+    if item.best_offer is None:
+        raise AssertionError("A fixture de notificacao precisa de uma oferta")
+    return ProductSummary(
+        product=replace(item.product, target_price=Decimal(PRICE_SCENARIOS["target"])),
+        best_offer=replace(
+            item.best_offer,
+            product_price=Decimal(current),
+            shipping_price=Decimal("0"),
+        ),
+        previous_best_total=Decimal(previous) if previous is not None else None,
+        historical_low=Decimal(current),
+        include_shipping=True,
+    )
+
+
 class TelegramNotificationTest(unittest.TestCase):
+    def test_first_valid_offer_creates_baseline_without_price_alert(self) -> None:
+        item = summary_for_prices(PRICE_SCENARIOS["target"], None)
+
+        decision = evaluate_alert(
+            item,
+            previous_historical_low=None,
+            previous_in_stock=None,
+        )
+
+        self.assertIsNone(decision)
+
+    def test_price_fixture_protects_one_percent_threshold(self) -> None:
+        baseline = PRICE_SCENARIOS["baseline"]
+        irrelevant = evaluate_alert(
+            summary_for_prices(PRICE_SCENARIOS["irrelevant_oscillation"], baseline),
+            previous_historical_low=Decimal("900"),
+            previous_in_stock=True,
+        )
+        relevant = evaluate_alert(
+            summary_for_prices(PRICE_SCENARIOS["relevant_drop"], baseline),
+            previous_historical_low=Decimal("900"),
+            previous_in_stock=True,
+        )
+
+        self.assertIsNone(irrelevant)
+        self.assertEqual(relevant.events, (PRICE_DROP,))
+
     def test_formats_new_low_alert_with_escaped_html(self) -> None:
         decision = AlertDecision(
             events=(NEW_HISTORICAL_LOW, PRICE_DROP, TARGET_REACHED),

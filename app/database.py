@@ -195,10 +195,20 @@ class RadarDatabase:
         *,
         include_shipping: bool = True,
         mode: str | None = None,
+        current_run_id: int | None = None,
     ) -> Decimal | None:
         price_column = "total_price_cents" if include_shipping else "product_price_cents"
         mode_clause = " AND r.mode = ?" if mode else ""
-        parameters: tuple[object, ...] = (product_id, mode) if mode else (product_id,)
+        run_clause = (
+            " AND (r.status = 'SUCCESS' OR r.id = ?)"
+            if current_run_id is not None
+            else " AND r.status = 'SUCCESS'"
+        )
+        parameters: list[object] = [product_id]
+        if mode:
+            parameters.append(mode)
+        if current_run_id is not None:
+            parameters.append(current_run_id)
         with self.connection() as connection:
             row = connection.execute(
                 f"""
@@ -206,9 +216,9 @@ class RadarDatabase:
                 FROM observations o
                 JOIN runs r ON r.id = o.run_id
                 WHERE o.product_id = ? AND o.status = 'OK' AND o.in_stock = 1
-                    AND o.{price_column} IS NOT NULL{mode_clause}
+                    AND o.{price_column} IS NOT NULL{mode_clause}{run_clause}
                 """,
-                parameters,
+                tuple(parameters),
             ).fetchone()
         return _from_cents(row["value"])
 
@@ -236,7 +246,10 @@ class RadarDatabase:
                     SELECT MAX(o2.run_id)
                     FROM observations o2
                     JOIN runs r2 ON r2.id = o2.run_id
-                    WHERE o2.product_id = ? AND o2.run_id < ?{mode_clause}
+                    WHERE o2.product_id = ? AND o2.run_id < ?
+                        AND r2.status = 'SUCCESS'
+                        AND o2.status = 'OK' AND o2.in_stock = 1
+                        AND o2.{price_column} IS NOT NULL{mode_clause}
                 )
                 AND o.status = 'OK' AND o.in_stock = 1 AND o.{price_column} IS NOT NULL
                 """,
@@ -252,30 +265,47 @@ class RadarDatabase:
         mode: str | None = None,
     ) -> bool | None:
         mode_clause = " AND r2.mode = ?" if mode else ""
-        parameters: tuple[object, ...] = (
-            (product_id, product_id, current_run_id, mode)
-            if mode
-            else (product_id, product_id, current_run_id)
-        )
         with self.connection() as connection:
             rows = connection.execute(
                 f"""
-                SELECT o.in_stock, o.status
+                SELECT o.run_id, o.in_stock, o.status
                 FROM observations o
-                WHERE o.product_id = ? AND o.run_id = (
-                    SELECT MAX(o2.run_id)
-                    FROM observations o2
-                    JOIN runs r2 ON r2.id = o2.run_id
-                    WHERE o2.product_id = ? AND o2.run_id < ?{mode_clause}
-                )
+                JOIN runs r2 ON r2.id = o.run_id
+                WHERE o.product_id = ? AND o.run_id < ?
+                    AND r2.status = 'SUCCESS'{mode_clause}
+                ORDER BY o.run_id DESC, o.id
                 """,
-                parameters,
+                (
+                    (product_id, current_run_id, mode)
+                    if mode
+                    else (product_id, current_run_id)
+                ),
             ).fetchall()
         if not rows:
             return None
+
+        current_previous_run_id: int | None = None
+        run_rows: list[sqlite3.Row] = []
+        for row in rows:
+            if current_previous_run_id is None:
+                current_previous_run_id = int(row["run_id"])
+            if int(row["run_id"]) != current_previous_run_id:
+                state = self._definitive_stock_state(run_rows)
+                if state is not None:
+                    return state
+                run_rows = []
+                current_previous_run_id = int(row["run_id"])
+            run_rows.append(row)
+        state = self._definitive_stock_state(run_rows)
+        if state is not None:
+            return state
+        return None
+
+    @staticmethod
+    def _definitive_stock_state(rows: list[sqlite3.Row]) -> bool | None:
         if any(row["status"] == "OK" and bool(row["in_stock"]) for row in rows):
             return True
-        if all(row["status"] == "OUT_OF_STOCK" for row in rows):
+        if rows and all(row["status"] == "OUT_OF_STOCK" for row in rows):
             return False
         return None
 

@@ -1,0 +1,15 @@
+{% extends "base.html" %}
+{% block title %}Editar fonte — ChaRadarzin{% endblock %}
+{% block content %}
+  <section class="form-page-heading compact-heading">
+    <a class="back-link" href="{% url 'product-detail-page' product.id %}">← Voltar ao produto</a>
+    <p class="eyebrow">{{ source.get_store_display|default:source.store }}</p>
+    <h1>Validação da fonte.</h1>
+    <p>A URL permanece bloqueada. Para trocar o endereço, adicione uma nova fonte e pause esta.</p>
+  </section>
+  <form method="post" class="form-card stacked-form narrow-form" novalidate>
+    {% csrf_token %}
+    {% include "monitoring/_form_fields.html" with form=form %}
+    <button class="primary-button" type="submit">Salvar validação</button>
+  </form>
+{% endblock %}

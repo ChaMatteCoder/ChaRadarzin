@@ -1,0 +1,15 @@
+{% extends "base.html" %}
+{% block title %}Editar {{ product.name }} — ChaRadarzin{% endblock %}
+{% block content %}
+  <section class="form-page-heading compact-heading">
+    <a class="back-link" href="{% url 'product-detail-page' product.id %}">← Voltar ao produto</a>
+    <p class="eyebrow">Editar monitoramento</p>
+    <h1>Dados do produto.</h1>
+    <p>Mudar modelo ou variante altera o que os coletores considerarão uma oferta comparável.</p>
+  </section>
+  <form method="post" class="form-card stacked-form narrow-form" novalidate>
+    {% csrf_token %}
+    {% include "monitoring/_form_fields.html" with form=form %}
+    <button class="primary-button" type="submit">Salvar alterações</button>
+  </form>
+{% endblock %}

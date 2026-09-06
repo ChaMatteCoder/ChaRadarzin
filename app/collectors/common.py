@@ -18,6 +18,7 @@ class ParsedOffer:
     product_price: Decimal | None
     in_stock: bool
     supports_pix: bool
+    price_payment_method: str
     parser_version: str
 
 

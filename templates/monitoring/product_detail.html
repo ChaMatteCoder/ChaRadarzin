@@ -1,0 +1,156 @@
+{% extends "base.html" %}
+{% load monitoring_extras %}
+{% block title %}{{ product.name }} — ChaRadarzin{% endblock %}
+{% block content %}
+  <section class="product-detail-heading">
+    <div>
+      <a class="back-link" href="{% url 'dashboard' %}">← Voltar ao painel</a>
+      <span class="status-badge tone-{{ product.collection_state.tone }}">{{ product.collection_state.label }}</span>
+      <h1>{{ product.name }}</h1>
+      <p>{{ product.exact_model }} · {{ product.variant }}</p>
+    </div>
+    {% if product.status != "ARCHIVED" %}
+      <div class="inline-actions">
+        <a class="secondary-button" href="{% url 'product-edit' product.id %}">Editar</a>
+        <form method="post" action="{% url 'product-toggle-pause' product.id %}">
+          {% csrf_token %}
+          <button class="primary-button" type="submit">{% if product.status == "PAUSED" %}Retomar{% else %}Pausar{% endif %}</button>
+        </form>
+      </div>
+    {% endif %}
+  </section>
+
+  <section class="offer-highlight" aria-label="Melhor oferta atual">
+    <div class="section-heading">
+      <div><p class="eyebrow">Agora</p><h2>Melhor oferta</h2></div>
+      {% if history.best_offer %}<span class="status-badge tone-success">Oferta válida</span>{% endif %}
+    </div>
+    {% if history.best_offer %}
+      <div class="offer-highlight-main">
+        <div>
+          <strong class="offer-price">{{ history.best_offer.total_price_cents|brl_cents }}</strong>
+          <span class="offer-caption">custo total em {{ history.best_offer.source.get_store_display|default:history.best_offer.source.store }}</span>
+        </div>
+        <a class="primary-button" href="{{ history.best_offer.source.url }}" target="_blank" rel="noopener noreferrer">Ver oferta ↗</a>
+      </div>
+      <div class="offer-facts">
+        <span>Produto <strong>{{ history.best_offer.product_price_cents|brl_cents }}</strong></span>
+        <span>Frete <strong>{{ history.best_offer.shipping_price_cents|brl_cents }}</strong></span>
+        <span>Vendedor <strong>{{ history.best_offer.seller|default:"não informado" }}</strong></span>
+        <span>Observado <strong>{{ history.best_offer.observed_at|date:"d/m/Y H:i" }}</strong></span>
+      </div>
+    {% else %}
+      <div class="empty-state small-empty">
+        <h3>Ainda não há preço comparável</h3>
+        <p>A primeira coleta cria a baseline. Falhas de loja e produtos fora de estoque ficam registradas sem inventar um preço.</p>
+      </div>
+    {% endif %}
+  </section>
+
+  <section class="data-grid" aria-label="Resumo do produto">
+    <article><span>Preço atual</span><strong>{% if history.best_offer %}{{ history.best_offer.total_price_cents|brl_cents }}{% else %}—{% endif %}</strong></article>
+    <article><span>Menor histórico</span><strong>{{ history.historical_low_cents|brl_cents }}</strong></article>
+    <article><span>Variação diária</span><strong class="{% if history.variation_percent < 0 %}metric-down{% elif history.variation_percent > 0 %}metric-up{% endif %}">{% if history.variation_percent is not None %}{{ history.variation_percent|floatformat:1 }}%{% else %}—{% endif %}</strong></article>
+    <article><span>Preço-alvo</span><strong>{{ product.target_price_cents|brl_cents }}</strong></article>
+    <article><span>Baseline</span><strong>{{ product.baseline_total_cents|brl_cents }}</strong>{% if product.baseline_observed_at %}<small>{{ product.baseline_observed_at|date:"d/m/Y H:i" }}</small>{% endif %}</article>
+    <article><span>Pagamento</span><strong>{{ product.get_preferred_payment_method_display }}</strong></article>
+  </section>
+
+  <section class="panel-section history-section">
+    <div class="section-heading">
+      <div><p class="eyebrow">Histórico</p><h2>Preço por dia</h2></div>
+      {% if history.rows %}<span class="coming-soon">{{ history.rows|length }} dia{{ history.rows|length|pluralize }} registrado{{ history.rows|length|pluralize }}</span>{% endif %}
+    </div>
+    {% if history.rows %}
+      <div class="history-chart-wrap">
+        <svg class="history-chart" viewBox="0 0 100 100" role="img" aria-label="Evolução do custo total diário">
+          <line x1="8" y1="20" x2="92" y2="20" class="chart-grid-line" />
+          <line x1="8" y1="54" x2="92" y2="54" class="chart-grid-line" />
+          <line x1="8" y1="88" x2="92" y2="88" class="chart-grid-line" />
+          <polygon points="{{ history.chart_area_points }}" class="chart-area" />
+          <polyline points="{{ history.chart_points }}" class="chart-line" />
+          {% for point in history.points %}<circle cx="{{ point.x }}" cy="{{ point.y }}" r="1.6" class="chart-dot"><title>{{ point.day_label }} — {{ point.total_price_cents|brl_cents }}</title></circle>{% endfor %}
+        </svg>
+        <div class="chart-labels" aria-hidden="true">{% for point in history.points %}{% if point.show_label %}<span>{{ point.day_label }}</span>{% else %}<span></span>{% endif %}{% endfor %}</div>
+      </div>
+      <div class="history-list">
+        {% for row in history.rows|slice:":10" %}
+          <div class="history-row"><span><strong>{{ row.day_label }}</strong><small>melhor oferta · {{ row.source_name }}</small></span><strong>{{ row.total_price_cents|brl_cents }}</strong></div>
+        {% endfor %}
+      </div>
+      {% if history.rows|length > 10 %}<p class="section-note">Mostrando os 10 dias mais recentes; o gráfico mantém até 30 dias.</p>{% endif %}
+    {% else %}
+      <div class="empty-state small-empty"><h3>Histórico começa na primeira coleta</h3><p>Quando houver um preço válido, ele aparecerá aqui com comparação ao menor valor registrado.</p></div>
+    {% endif %}
+  </section>
+
+  <section class="panel-section">
+    <div class="section-heading">
+      <div><p class="eyebrow">Links exatos</p><h2>Fontes monitoradas</h2></div>
+      {% if product.status != "ARCHIVED" %}<a class="secondary-button" href="{% url 'source-new' product.id %}">Adicionar outra loja</a>{% endif %}
+    </div>
+    <div class="source-list">
+      {% for source in sources %}
+        <article class="source-card{% if not source.active %} is-inactive{% endif %}">
+          <div>
+            <span class="source-store">{{ source.get_store_display|default:source.store }}</span>
+            <h3>{{ source.url|hostname }}</h3>
+            <p>Vendedor: {{ source.expected_seller }} · Variante: {{ source.expected_variant }}</p>
+            <a href="{{ source.url }}" target="_blank" rel="noopener noreferrer">Ver link exato ↗</a>
+          </div>
+          {% if product.status != "ARCHIVED" %}
+            <div class="source-actions">
+              <span class="status-badge tone-{% if source.active %}success{% else %}muted{% endif %}">{% if source.active %}Ativa{% else %}Pausada{% endif %}</span>
+              <a class="text-link" href="{% url 'source-edit' product.id source.id %}">Editar validação</a>
+              <form method="post" action="{% url 'source-toggle' product.id source.id %}">{% csrf_token %}<button class="text-button" type="submit">{% if source.active %}Pausar fonte{% else %}Ativar fonte{% endif %}</button></form>
+            </div>
+          {% endif %}
+        </article>
+      {% empty %}
+        <div class="empty-state small-empty"><h3>Nenhuma fonte ativa</h3><p>Adicione um link exato para voltar a monitorar.</p></div>
+      {% endfor %}
+    </div>
+  </section>
+
+  <section class="panel-section compact-section">
+    <div class="section-heading"><div><p class="eyebrow">Última execução</p><h2>Status técnico legível</h2></div></div>
+    {% if latest_observation %}
+      <div class="observation-row"><div><strong>{{ latest_observation.status }}</strong><span>{{ latest_observation.observed_at|date:"d/m/Y H:i" }}</span></div><div><strong>{{ latest_observation.total_price_cents|brl_cents }}</strong><span>Custo total registrado</span></div></div>
+      {% if latest_observation.status != "OK" and latest_observation.status != "OUT_OF_STOCK" %}<p class="error-note">A última tentativa não gerou preço comparável. O histórico válido anterior foi preservado.</p>{% endif %}
+    {% else %}
+      <p class="section-copy">Nenhuma observação ainda. O produto está ativo e aguardará a primeira execução do motor de coleta.</p>
+    {% endif %}
+  </section>
+
+  <section class="panel-section compact-section">
+    <div class="section-heading"><div><p class="eyebrow">Alertas</p><h2>Eventos enviados</h2></div></div>
+    {% if alert_events %}
+      <div class="event-list">
+        {% for event in alert_events %}
+          <article class="event-row">
+            <div><strong>{{ event.reason }}</strong><span>{{ event.occurred_at|date:"d/m/Y H:i" }} · {{ event.current_price_cents|brl_cents }}</span></div>
+            <span class="status-badge {% if event.delivery_status_label == 'Enviado' %}tone-success{% elif event.delivery_status_label == 'Falhou' or event.delivery_status_label == 'Bloqueado' %}tone-danger{% else %}tone-pending{% endif %}">{{ event.delivery_status_label }}</span>
+          </article>
+        {% endfor %}
+      </div>
+    {% else %}
+      <p class="section-copy">Nenhum evento relevante para este produto. Isso é esperado na baseline e quando as oscilações ficam abaixo do limite.</p>
+    {% endif %}
+  </section>
+
+  <section class="panel-section compact-section bot-status-panel">
+    <div class="section-heading"><div><p class="eyebrow">Telegram</p><h2>Estado das notificações</h2></div></div>
+    {% if personal_bot %}
+      <p class="section-copy">Bot <strong>@{{ personal_bot.username }}</strong>: <span class="status-badge {% if personal_bot.status == 'ACTIVE' %}tone-success{% elif personal_bot.status == 'BLOCKED' or personal_bot.status == 'REVOKED' or personal_bot.status == 'ERROR' %}tone-danger{% else %}tone-pending{% endif %}">{{ personal_bot.get_status_display }}</span></p>
+    {% else %}
+      <p class="section-copy">Nenhum bot pessoal conectado. Conecte o Telegram para receber eventos quando houver mudança relevante.</p>
+    {% endif %}
+  </section>
+
+  {% if product.status != "ARCHIVED" %}
+    <section class="archive-zone">
+      <div><h2>Remover do radar</h2><p>As coletas param, as fontes são desativadas e o histórico permanece preservado.</p></div>
+      <form method="post" action="{% url 'product-archive' product.id %}">{% csrf_token %}<button class="danger-button" type="submit">Remover produto</button></form>
+    </section>
+  {% endif %}
+{% endblock %}

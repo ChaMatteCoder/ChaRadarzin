@@ -31,6 +31,7 @@ def parse_kabum_html(html: str) -> ParsedOffer:
     if not title:
         raise OfferParseError("Titulo do produto ausente na KaBuM")
 
+    supports_pix = bool(re.search(r"\bpix\b", html, re.IGNORECASE))
     return ParsedOffer(
         title=title,
         seller=str(
@@ -40,6 +41,7 @@ def parse_kabum_html(html: str) -> ParsedOffer:
         ).strip(),
         product_price=parse_brl(price),
         in_stock=bool(product.get("available", (product.get("flags") or {}).get("isAvailable"))),
-        supports_pix=bool(re.search(r"\bpix\b", html, re.IGNORECASE)),
+        supports_pix=supports_pix,
+        price_payment_method="PIX" if supports_pix else "",
         parser_version=PARSER_VERSION,
     )

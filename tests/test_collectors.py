@@ -1,9 +1,9 @@
 from __future__ import annotations
 
-import json
 import unittest
 from datetime import datetime
 from decimal import Decimal
+from pathlib import Path
 
 from app.collectors.amazon import parse_amazon_html
 from app.collectors.kabum import parse_kabum_html
@@ -11,40 +11,16 @@ from app.collectors.real import collect_real_observations
 from app.models import Catalog, Product, ProductLink
 
 
-AMAZON_HTML = """
-<html><head><title>SSD Crucial BX500 CT1000BX500SSD1 1 TB SATA</title></head>
-<body>
-  <span id="productTitle">SSD Crucial BX500 CT1000BX500SSD1 1 TB SATA</span>
-  <div id="corePriceDisplay_desktop_feature_div">
-    <span class="a-price"><span class="a-offscreen">R$ 862,60</span></span>
-    <span>5% off no Pix</span>
-  </div>
-  <a id='sellerProfileTriggerId'>BPS Oficial</a>
-  <div id="availability"><span>Em estoque</span></div>
-</body></html>
-"""
+FIXTURES = Path(__file__).resolve().parent / "fixtures"
 
 
-KABUM_DATA = {
-    "props": {
-        "pageProps": {
-            "product": {
-                "title": "SSD Crucial BX500 CT1000BX500SSD1 1 TB SATA",
-                "id": 167492,
-                "sellerName": "TEITEC INFORMÁTICA",
-                "sellerId": 3294,
-                "offerIdMarketplace": 374498,
-                "available": True,
-                "prices": {"priceWithDiscount": 999},
-            }
-        }
-    }
-}
-KABUM_HTML = (
-    '<html><body><script id="__NEXT_DATA__" type="application/json">'
-    + json.dumps(KABUM_DATA, ensure_ascii=False)
-    + "</script><span>À vista no PIX</span></body></html>"
-)
+def fixture_text(*parts: str) -> str:
+    return FIXTURES.joinpath(*parts).read_text(encoding="utf-8")
+
+
+AMAZON_HTML = fixture_text("amazon", "product_in_stock.html")
+AMAZON_DIRECT_SELLER_HTML = fixture_text("amazon", "product_direct_seller.html")
+KABUM_HTML = fixture_text("kabum", "product_in_stock.html")
 
 
 class CollectorParserTest(unittest.TestCase):
@@ -54,14 +30,13 @@ class CollectorParserTest(unittest.TestCase):
         self.assertEqual(parsed.seller, "BPS Oficial")
         self.assertTrue(parsed.in_stock)
         self.assertTrue(parsed.supports_pix)
+        self.assertEqual(parsed.price_payment_method, "PIX")
 
     def test_parses_amazon_as_direct_seller(self) -> None:
-        html = AMAZON_HTML.replace(
-            "<a id='sellerProfileTriggerId'>BPS Oficial</a>",
-            '<div id="merchantInfoFeature_feature_div">'
-            '<span class="offer-display-feature-text-message">Amazon.com.br</span></div>',
+        self.assertEqual(
+            parse_amazon_html(AMAZON_DIRECT_SELLER_HTML).seller,
+            "Amazon.com.br",
         )
-        self.assertEqual(parse_amazon_html(html).seller, "Amazon.com.br")
 
     def test_parses_kabum_next_data(self) -> None:
         parsed = parse_kabum_html(KABUM_HTML)

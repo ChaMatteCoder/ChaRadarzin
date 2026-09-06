@@ -20,7 +20,7 @@ class FetchError(RuntimeError):
 def canonicalize_product_url(url: str) -> str:
     parts = urlsplit(url)
     hostname = (parts.hostname or "").casefold()
-    if hostname.endswith("amazon.com.br"):
+    if hostname == "amazon.com.br" or hostname.endswith(".amazon.com.br"):
         asin = re.search(r"/(?:dp|gp/product)/([A-Z0-9]{10})", parts.path, re.IGNORECASE)
         if asin:
             query = parse_qs(parts.query)
@@ -28,7 +28,7 @@ def canonicalize_product_url(url: str) -> str:
             return f"https://www.amazon.com.br/dp/{asin.group(1).upper()}" + (
                 f"?{kept_query}" if kept_query else ""
             )
-    if hostname.endswith("kabum.com.br"):
+    if hostname == "kabum.com.br" or hostname.endswith(".kabum.com.br"):
         query = parse_qs(parts.query)
         kept_query = (
             urlencode({"seller_offer_id": query["seller_offer_id"][0]})

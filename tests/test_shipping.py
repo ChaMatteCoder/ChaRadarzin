@@ -4,6 +4,7 @@ import json
 import unittest
 from datetime import date
 from decimal import Decimal
+from pathlib import Path
 
 from app.models import Product, ProductLink
 from app.shipping import (
@@ -17,12 +18,18 @@ from app.shipping import (
 )
 
 
-KABUM_HTML = """
-<script id="__NEXT_DATA__" type="application/json">
-{"props":{"pageProps":{"product":{"id":167492,"sellerName":"TEITEC INFORMÁTICA",
-"sellerId":3294,"offerIdMarketplace":374498}}}}
-</script>
-"""
+FIXTURES = Path(__file__).resolve().parent / "fixtures" / "shipping"
+
+
+def fixture_text(name: str) -> str:
+    return (FIXTURES / name).read_text(encoding="utf-8")
+
+
+def fixture_json(name: str) -> dict:
+    return json.loads(fixture_text(name))
+
+
+KABUM_HTML = fixture_text("kabum_product_context.html")
 
 
 class ShippingTest(unittest.TestCase):
@@ -40,22 +47,7 @@ class ShippingTest(unittest.TestCase):
         self.assertEqual(context.offer_id, 374498)
 
     def test_chooses_cheapest_home_delivery(self) -> None:
-        quote = parse_kabum_shipping_response(
-            {
-                "quotes": [
-                    {
-                        "deliveries": [
-                            {"code": 32, "name": "Expressa", "price": 20.89,
-                             "max_days": 3, "type": "CONVENTIONAL"},
-                            {"code": 31, "name": "Padrão", "price": 25.75,
-                             "max_days": 7, "type": "CONVENTIONAL"},
-                            {"code": 99, "name": "Retirada", "price": 0,
-                             "max_days": 1, "type": "TAKE_AWAY"},
-                        ]
-                    }
-                ]
-            }
-        )
+        quote = parse_kabum_shipping_response(fixture_json("kabum_quote.json"))
         self.assertEqual(quote.price, Decimal("20.89"))
         self.assertEqual(quote.delivery_max_days, 3)
         self.assertEqual(quote.service_name, "Expressa")
@@ -92,12 +84,9 @@ class ShippingTest(unittest.TestCase):
             parse_kabum_shipping_response({"quotes": []})
 
     def test_parses_free_amazon_delivery_date(self) -> None:
-        html = (
-            '<span data-csa-c-delivery-price="GRÁTIS" '
-            'data-csa-c-delivery-time="Sexta-feira, 28 de Agosto"></span>'
-        )
         quote = parse_amazon_shipping_html(
-            html, observed_on=date(2026, 8, 26)
+            fixture_text("amazon_free_delivery.html"),
+            observed_on=date(2026, 8, 26),
         )
         self.assertEqual(quote.price, Decimal("0.00"))
         self.assertEqual(quote.delivery_max_days, 2)

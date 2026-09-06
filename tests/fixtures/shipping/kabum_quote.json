@@ -1,0 +1,11 @@
+{
+  "quotes": [
+    {
+      "deliveries": [
+        {"code": 32, "name": "Expressa", "price": 20.89, "max_days": 3, "type": "CONVENTIONAL"},
+        {"code": 31, "name": "Padrão", "price": 25.75, "max_days": 7, "type": "CONVENTIONAL"},
+        {"code": 99, "name": "Retirada", "price": 0, "max_days": 1, "type": "TAKE_AWAY"}
+      ]
+    }
+  ]
+}

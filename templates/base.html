@@ -1,0 +1,39 @@
+{% load static %}
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light">
+  <title>{% block title %}ChaRadarzin{% endblock %}</title>
+  <link rel="icon" href="{% static 'chadaradzin/favicon.svg' %}" type="image/svg+xml">
+  <link rel="stylesheet" href="{% static 'chadaradzin/app.css' %}">
+</head>
+<body>
+  <header class="site-header">
+    <a class="brand" href="{% url 'landing' %}" aria-label="ChaRadarzin — início">
+      <span class="brand-mark" aria-hidden="true">C</span>
+      <span>ChaRadarzin</span>
+    </a>
+    {% if user.is_authenticated %}
+      <nav aria-label="Conta">
+        <span class="account-name">{{ user.telegram_identity.display_name|default:user.username }}</span>
+        <form action="{% url 'logout' %}" method="post">
+          {% csrf_token %}
+          <button class="text-button" type="submit">Sair</button>
+        </form>
+      </nav>
+    {% endif %}
+  </header>
+  {% if messages %}
+    <section class="messages" aria-live="polite">
+      {% for message in messages %}<p>{{ message }}</p>{% endfor %}
+    </section>
+  {% endif %}
+  <main>{% block content %}{% endblock %}</main>
+  <footer class="site-footer">
+    <a href="{% url 'privacy-policy' %}">Privacidade</a>
+    {% if user.is_authenticated %}<a href="{% url 'delete-account' %}">Excluir minha conta</a>{% endif %}
+  </footer>
+</body>
+</html>

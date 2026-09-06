@@ -1,0 +1,28 @@
+{% extends "base.html" %}
+{% block title %}{% if product %}Nova fonte{% else %}Novo produto{% endif %} — ChaRadarzin{% endblock %}
+{% block content %}
+  <section class="form-page-heading">
+    <a class="back-link" href="{% if product %}{% url 'product-detail-page' product.id %}{% else %}{% url 'dashboard' %}{% endif %}">← Voltar</a>
+    <p class="eyebrow">{% if product %}Nova fonte para {{ product.name }}{% else %}Novo monitoramento{% endif %}</p>
+    <h1>Cole o link exato.</h1>
+    <p>Não fazemos busca genérica. A prévia consulta somente a página informada e pede sua confirmação antes de ativar o radar.</p>
+  </section>
+
+  <section class="form-layout">
+    <form method="post" class="form-card stacked-form" novalidate>
+      {% csrf_token %}
+      {% include "monitoring/_form_fields.html" with form=form %}
+      <button class="primary-button" type="submit">Gerar prévia segura</button>
+    </form>
+    <aside class="guidance-card">
+      <p class="eyebrow">Links aceitos</p>
+      <h2>Amazon Brasil e KaBuM</h2>
+      <ul>
+        <li>Use HTTPS e a página exata do produto.</li>
+        <li>Links encurtados e redirects são recusados.</li>
+        <li>Nunca contornamos CAPTCHA ou login da loja.</li>
+        <li>A prévia expira e não armazena o HTML da página.</li>
+      </ul>
+    </aside>
+  </section>
+{% endblock %}

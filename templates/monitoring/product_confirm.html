@@ -1,0 +1,36 @@
+{% extends "base.html" %}
+{% load monitoring_extras %}
+{% block title %}Confirmar produto — ChaRadarzin{% endblock %}
+{% block content %}
+  <section class="form-page-heading compact-heading">
+    <a class="back-link" href="{% if preview.target_product %}{% url 'product-detail-page' preview.target_product.id %}{% else %}{% url 'product-new' %}{% endif %}">← Voltar</a>
+    <p class="eyebrow">Confirmação humana</p>
+    <h1>Confira antes de ativar.</h1>
+    <p>A loja fornece a prévia; você decide quais dados identificam exatamente o produto desejado.</p>
+  </section>
+
+  {% if preview.status == "READY" %}
+    <section class="preview-card">
+      <div class="preview-store"><span>{{ preview.get_store_display }}</span><a href="{{ preview.canonical_url }}" target="_blank" rel="noopener noreferrer">Abrir na loja ↗</a></div>
+      <h2>{{ preview.extracted_title }}</h2>
+      <div class="preview-facts">
+        <div><span>Preço encontrado</span><strong>{{ preview.extracted_price_cents|brl_cents }}</strong></div>
+        <div><span>Vendedor</span><strong>{{ preview.extracted_seller }}</strong></div>
+        <div><span>Estoque</span><strong>{% if preview.extracted_in_stock %}Disponível{% else %}Indisponível{% endif %}</strong></div>
+        <div><span>PIX na página</span><strong>{% if preview.supports_pix %}Identificado{% else %}Não confirmado{% endif %}</strong></div>
+      </div>
+    </section>
+
+    <form method="post" class="form-card confirmation-form stacked-form" novalidate>
+      {% csrf_token %}
+      <div class="form-intro"><p class="eyebrow">Dados do seu radar</p><h2>O que deve ser validado nas próximas coletas?</h2></div>
+      {% include "monitoring/_form_fields.html" with form=form %}
+      <div class="confirmation-note"><strong>Não misture variantes.</strong> Se capacidade, tamanho ou modelo forem diferentes, cadastre como outro produto.</div>
+      <button class="primary-button" type="submit">Confirmar e ativar produto</button>
+    </form>
+  {% elif preview.status == "CONFIRMED" and preview.confirmed_source %}
+    <section class="result-card"><span>✓</span><h2>Produto já confirmado</h2><p>Este envio foi processado uma única vez.</p><a class="primary-button" href="{% url 'product-detail-page' preview.confirmed_source.product_id %}">Abrir produto</a></section>
+  {% else %}
+    <section class="result-card has-error"><span>!</span><h2>Não foi possível gerar uma prévia segura</h2><p>O link pode ter expirado, redirecionado, bloqueado a consulta ou mudado de formato. Código: {{ preview.error_code|default:preview.status }}</p><a class="primary-button" href="{% if preview.target_product %}{% url 'source-new' preview.target_product.id %}{% else %}{% url 'product-new' %}{% endif %}">Tentar outro link</a></section>
+  {% endif %}
+{% endblock %}

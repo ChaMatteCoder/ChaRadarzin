@@ -1,15 +1,15 @@
 from __future__ import annotations
 
-import re
 from collections.abc import Callable
 from datetime import datetime
 from decimal import Decimal
 from urllib.parse import urlsplit
 
 from app.collectors.amazon import parse_amazon_html
-from app.collectors.common import OfferParseError, ParsedOffer, compact, normalize
+from app.collectors.common import OfferParseError, ParsedOffer, normalize
 from app.collectors.http import FetchError, canonicalize_product_url, fetch_html
 from app.collectors.kabum import parse_kabum_html
+from app.collectors.validation import model_matches, seller_matches, variant_matches
 from app.models import Catalog, OfferObservation, Product, ProductLink
 from app.shipping import ShippingNotAvailable, ShippingQuote, quote_shipping
 
@@ -34,38 +34,6 @@ def _declared_store(store: str) -> str | None:
     if "kabum" in value:
         return "kabum"
     return None
-
-
-def _variant_matches(variant: str, title: str) -> bool:
-    normalized_title = normalize(title)
-    compact_title = compact(title)
-    for raw_part in variant.split("/"):
-        part = raw_part.strip()
-        if not part:
-            continue
-        compact_part = compact(part)
-        if compact_part and compact_part in compact_title:
-            continue
-        normalized_part = normalize(part)
-        if "polegada" in normalized_part:
-            number = re.search(r"\d+(?:[.,]\d+)?", normalized_part)
-            if number and number.group(0).replace(",", ".") in normalized_title.replace(",", "."):
-                continue
-        tokens = [token for token in re.findall(r"[a-z0-9]+", normalized_part) if len(token) >= 2]
-        if tokens and all(token in normalized_title for token in tokens):
-            continue
-        return False
-    return True
-
-
-def _seller_matches(expected: str, actual: str) -> bool:
-    expected_value = normalize(expected)
-    actual_value = normalize(actual)
-    return bool(expected_value and actual_value) and (
-        expected_value == actual_value
-        or expected_value in actual_value
-        or actual_value in expected_value
-    )
 
 
 def _observation(
@@ -155,7 +123,7 @@ def _collect_one(
             error_message=str(exc),
         )
 
-    if compact(product.exact_model) not in compact(parsed.title):
+    if not model_matches(product.exact_model, parsed.title):
         return _observation(
             product,
             link,
@@ -168,7 +136,7 @@ def _collect_one(
                 f"{parsed.title[:180]}"
             ),
         )
-    if not _variant_matches(link.variant, parsed.title):
+    if not variant_matches(link.variant, parsed.title):
         return _observation(
             product,
             link,
@@ -178,7 +146,7 @@ def _collect_one(
             parsed=parsed,
             error_message=f"Variante esperada '{link.variant}' nao confere com o titulo",
         )
-    if not _seller_matches(link.expected_seller, parsed.seller):
+    if not seller_matches(link.expected_seller, parsed.seller):
         return _observation(
             product,
             link,
@@ -210,7 +178,12 @@ def _collect_one(
             parsed=parsed,
             error_message="Preco principal nao identificado",
         )
-    if product.payment_method == "PIX" and not parsed.supports_pix:
+    payment_mismatch = (
+        product.payment_method == "PIX" and parsed.price_payment_method != "PIX"
+    ) or (
+        product.payment_method != "PIX" and parsed.price_payment_method == "PIX"
+    )
+    if payment_mismatch:
         return _observation(
             product,
             link,
@@ -218,7 +191,7 @@ def _collect_one(
             status="PAYMENT_MISMATCH",
             parser_version=parsed.parser_version,
             parsed=parsed,
-            error_message="A pagina nao confirmou preco ou pagamento via PIX",
+            error_message="O preco extraido nao corresponde a forma de pagamento esperada",
         )
 
     shipping_quote = None

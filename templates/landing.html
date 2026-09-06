@@ -1,0 +1,23 @@
+{% extends "base.html" %}
+{% block title %}ChaRadarzin — seu radar pessoal{% endblock %}
+{% block content %}
+  <section class="hero">
+    <p class="eyebrow">Preço certo, no seu tempo</p>
+    <h1>Seu radar de preços,<br><span>sem ruído.</span></h1>
+    <p class="hero-copy">
+      Acompanhe links exatos, compare produto e frete e receba um alerta somente
+      quando houver uma oportunidade relevante.
+    </p>
+    {% if telegram_login_enabled %}
+      <a class="primary-button" href="{% url 'telegram-login' %}">Entrar com Telegram</a>
+    {% else %}
+      <span class="disabled-button" aria-disabled="true">Login Telegram em configuração</span>
+      <p class="technical-note">O administrador ainda precisa configurar as credenciais OIDC.</p>
+    {% endif %}
+  </section>
+  <section class="feature-grid" aria-label="Como funciona">
+    <article><span>01</span><h2>Você escolhe</h2><p>Cadastre apenas o link do produto exato que quer acompanhar.</p></article>
+    <article><span>02</span><h2>Nós comparamos</h2><p>Preço, disponibilidade, frete e prazo entram na mesma conta.</p></article>
+    <article><span>03</span><h2>Seu bot avisa</h2><p>Nenhuma mensagem quando nada relevante aconteceu.</p></article>
+  </section>
+{% endblock %}

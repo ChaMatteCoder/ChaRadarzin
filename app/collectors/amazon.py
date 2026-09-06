@@ -57,11 +57,13 @@ def parse_amazon_html(html: str) -> ParsedOffer:
         or price_text is not None
     )
 
+    supports_pix = bool(re.search(r"\bpix\b", html, re.IGNORECASE))
     return ParsedOffer(
         title=title,
         seller=seller,
         product_price=parse_brl(price_text),
         in_stock=in_stock,
-        supports_pix=bool(re.search(r"\bpix\b", html, re.IGNORECASE)),
+        supports_pix=supports_pix,
+        price_payment_method="PIX" if supports_pix else "",
         parser_version=PARSER_VERSION,
     )

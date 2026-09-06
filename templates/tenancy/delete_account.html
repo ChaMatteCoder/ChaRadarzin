@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+{% block title %}Excluir conta — ChaRadarzin{% endblock %}
+{% block content %}
+<section class="page-shell prose-card">
+  <p class="eyebrow">CONTROLE DE DADOS</p>
+  <h1>Excluir minha conta</h1>
+  <p>Esta ação remove permanentemente sua identidade, preferências, produtos, histórico e credencial criptografada deste servidor. O bot não é apagado da sua conta do Telegram.</p>
+  <p>Digite <strong>EXCLUIR MINHA CONTA</strong> para confirmar.</p>
+  <form method="post" class="stacked-form">
+    {% csrf_token %}
+    <label for="confirmation">Frase de confirmação</label>
+    <input id="confirmation" name="confirmation" autocomplete="off" required>
+    <button class="danger-button" type="submit">Excluir permanentemente</button>
+  </form>
+</section>
+{% endblock %}

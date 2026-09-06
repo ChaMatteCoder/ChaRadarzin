@@ -8,7 +8,7 @@ from app.spreadsheet import load_catalog
 
 class SpreadsheetTest(unittest.TestCase):
     def test_model_workbook_is_valid(self) -> None:
-        workbook = Path(__file__).resolve().parent.parent / "data" / "produtos.xlsx"
+        workbook = Path(__file__).resolve().parent.parent / "produtos.xlsx"
         catalog = load_catalog(workbook)
         self.assertGreaterEqual(len(catalog.products), 1)
         self.assertGreaterEqual(len(catalog.links), 2)

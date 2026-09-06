@@ -219,12 +219,12 @@ def run(
             observations = generate_simulated_observations(selected_catalog)
         else:
             if with_shipping:
-                address = resolve_postal_code(
+                resolve_postal_code(
                     settings.destination_postal_code or "",
                     timeout=settings.request_timeout_seconds,
                     retries=settings.request_retries,
                 )
-                LOGGER.info("Destino de entrega confirmado: %s", address.formatted)
+                LOGGER.info("Destino de entrega confirmado para cotacao")
             observations = collect_real_observations(
                 selected_catalog,
                 timeout=settings.request_timeout_seconds,
@@ -265,6 +265,7 @@ def run(
                     product.product_id,
                     include_shipping=include_shipping,
                     mode=mode,
+                    current_run_id=run_id,
                 ),
                 include_shipping=include_shipping,
             )

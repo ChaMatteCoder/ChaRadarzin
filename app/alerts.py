@@ -80,6 +80,15 @@ def evaluate_alert(
     if current is None:
         return None
 
+    # A primeira oferta valida estabelece a baseline. Eventos de preco so podem
+    # ser avaliados depois que existe algum estado historico comparavel.
+    if (
+        previous is None
+        and previous_historical_low is None
+        and previous_in_stock is None
+    ):
+        return None
+
     triggered: set[str] = set()
     if previous_historical_low is not None and current < previous_historical_low:
         triggered.add(NEW_HISTORICAL_LOW)

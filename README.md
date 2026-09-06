@@ -26,7 +26,7 @@ alertas no Telegram e análises conservadoras.
 - armazena execuções e observações em SQLite;
 - gera relatório Markdown com diagnóstico dos links;
 - executa ao entrar no Windows e mantém uma verificação diária de segurança;
-- envia um resumo das execuções automáticas e alertas relevantes pelo Telegram;
+- envia pelo Telegram somente alertas relevantes nas execuções automáticas;
 - calcula estatísticas, tendência, volatilidade, sazonalidade e previsão somente
   quando existe histórico suficiente.
 
@@ -56,13 +56,54 @@ entram na comparação.
 
 ## Requisitos
 
-- Windows 10 ou 11 para a automação incluída;
-- Python 3.11 ou superior;
+- Docker Desktop com Docker Compose para a instalação reproduzível recomendada;
+- ou Python 3.11 ou superior para desenvolvimento sem contêiner;
+- Windows 10 ou 11 somente para a automação local legada incluída;
 - Microsoft Excel ou outro editor compatível com `.xlsx` para editar o catálogo;
 - conexão com a internet durante as coletas reais;
 - bot do Telegram, opcional, para receber alertas.
 
 ## Instalação
+
+### Instalação limpa com Docker Compose
+
+Este é o caminho recomendado para executar a aplicação web completa com
+PostgreSQL, migrações automáticas, web, worker, scheduler e monitor:
+
+```powershell
+git clone https://github.com/ChaMatteCoder/ChaRadarzin.git
+cd ChaRadarzin
+Copy-Item .env.compose.example .env.compose
+docker run --rm python:3.13-alpine `
+  python -c "import secrets; print(secrets.token_urlsafe(48))"
+```
+
+Use duas saídas diferentes do último comando para substituir
+`DJANGO_SECRET_KEY` e `POSTGRES_PASSWORD` em `.env.compose`. Depois valide e
+suba o ambiente:
+
+```powershell
+docker compose --env-file .env.compose config
+docker compose --env-file .env.compose up --build -d
+docker compose --env-file .env.compose ps
+(Invoke-WebRequest -UseBasicParsing `
+  http://127.0.0.1:8000/health/ready/).Content
+```
+
+Abra `http://127.0.0.1:8000/`. O primeiro startup executa migrations e
+`collectstatic`; o login Telegram permanece desativado no perfil local até as
+credenciais serem configuradas. Se a porta 8000 já estiver em uso, troque
+`APP_PORT` em `.env.compose`. Para parar sem apagar o banco:
+
+```powershell
+docker compose --env-file .env.compose stop
+```
+
+Não use `down -v` em um ambiente com dados: a opção remove o volume do
+PostgreSQL. Homologação, cadastro beta, backup, restore e rollback estão no
+[runbook da Etapa 11](docs/stage-11-deploy-beta.md).
+
+### Instalação local com Python
 
 ```powershell
 git clone https://github.com/ChaMatteCoder/ChaRadarzin.git
@@ -77,7 +118,6 @@ Edite o `.env` localmente. Nunca envie esse arquivo ao Git:
 
 ```dotenv
 CEP_ENTREGA=00000000
-FORMA_PAGAMENTO=PIX
 RADAR_TIMEOUT_SEGUNDOS=20
 RADAR_TENTATIVAS=1
 TELEGRAM_NOTIFICACOES=nao
@@ -146,7 +186,135 @@ python -m app.main --simulate
 O relatório mais recente é criado em `reports/ultimo_relatorio.md`. Bancos,
 logs e relatórios reais são artefatos locais e estão ignorados pelo Git.
 
+## Fundação web multiusuário
+
+O CLI do MVP permanece disponível. A fundação web Django usa outro banco e
+começa sem permitir escrita de produtos pelo painel:
+
+```powershell
+python manage.py migrate
+python manage.py runserver
+```
+
+Abra `http://127.0.0.1:8000/`. Em desenvolvimento, sem as credenciais OIDC, a
+página inicial informa que o login Telegram ainda está em configuração. Para
+habilitá-lo, preencha no `.env` as variáveis `TELEGRAM_OIDC_*` e mantenha os
+segredos somente no ambiente local.
+
+Sem `DATABASE_URL`, o desenvolvimento usa `data/chadaradzin_web.sqlite3`. O
+ambiente `CHADARADZIN_ENV=production` recusa iniciar sem `DJANGO_SECRET_KEY` e
+uma `DATABASE_URL` PostgreSQL.
+
+### Produtos e painel (Etapa 4)
+
+Depois do login, `/painel/` permite cadastrar um produto por link exato da
+Amazon Brasil ou da KaBuM, revisar a prévia extraída e confirmar manualmente
+modelo, variante, vendedor, pagamento e preço-alvo. Também é possível adicionar
+outras fontes ao mesmo produto, editar, pausar, arquivar e configurar CEP e
+preferência de pagamento.
+
+O HTML da loja não é armazenado. A prévia usa uma lista fechada de hosts,
+validação de DNS público, bloqueio de redirecionamento, limite de tamanho,
+timeout, expiração e rate limit por tenant. Consulte
+[docs/stage-4-products-panel.md](docs/stage-4-products-panel.md) para o fluxo,
+as garantias e a validação humana necessária antes de produção.
+
+Produtos confirmados aparecem como **Aguardando primeira coleta**. O motor da
+Etapa 5 coleta cada URL canônica uma vez por lote, calcula frete de forma
+individual e cria a baseline na primeira observação válida. Confirmar um
+produto não dispara alerta.
+
+### Motor compartilhado de coleta (Etapa 5)
+
+O mesmo link acompanhado por vários tenants reutiliza preço-base, título,
+vendedor e estoque. CEP, pagamento, frete, prazo, total, validações e baseline
+continuam privados. Para executar um lote manual:
+
+```powershell
+py -3.14 manage.py collect_active_offers
+```
+
+O HTML das lojas não é persistido, falhas são isoladas e a coleta respeita um
+orçamento configurável de requisições por loja. Scheduler, filas e retries com
+backoff estão implementados na Etapa 6. Consulte
+[docs/stage-5-collection-engine.md](docs/stage-5-collection-engine.md).
+
+### Agendamento e workers (Etapa 6)
+
+O scheduler registra um job diário idempotente no banco e um worker separado
+executa o motor compartilhado. Tentativas, duração, lote, backoff e falhas
+esgotadas ficam rastreáveis sem registrar CEP ou credenciais:
+
+```powershell
+py -3.14 manage.py migrate
+py -3.14 manage.py schedule_daily_collection --force
+py -3.14 manage.py run_collection_worker --once
+```
+
+Em servidor, execute `run_collection_worker` continuamente. No Windows, os
+scripts de automação chamam scheduler e worker de uma vez. Consulte
+[docs/stage-6-scheduler-workers.md](docs/stage-6-scheduler-workers.md).
+
+### Motor de alertas (Etapa 7)
+
+Ao terminar cada lote, o sistema escolhe a melhor oferta válida por produto e
+cria eventos privados para reduções relevantes, novo menor histórico, preço-alvo
+ou retorno ao estoque. Baselines não alertam, oscilações pequenas são apenas
+registradas e cooldown/idempotência evitam repetição. Consulte
+[docs/stage-7-alert-engine.md](docs/stage-7-alert-engine.md).
+
+### Notificações e ações rápidas (Etapa 8)
+
+O worker entrega eventos pelo bot pessoal correto, registra `SENT`, `FAILED` ou
+`BLOCKED` e nunca repete a mesma entrega bem-sucedida. A mensagem inclui preço,
+frete, prazo, total, histórico, motivo e botões para abrir a oferta, o histórico,
+o painel ou pausar aquele produto. Os comandos continuam restritos ao
+proprietário; `/atualizar` cria um job manual com cooldown e acompanha seu
+resultado.
+
+Para reprocessar entregas pendentes:
+
+```powershell
+py -3.14 manage.py deliver_pending_alerts --limit 100
+```
+
+Consulte [docs/stage-8-notifications.md](docs/stage-8-notifications.md) para os
+estados, falhas seguras e a validação humana necessária antes de enviar uma
+mensagem real.
+
+### Histórico e experiência (Etapa 9)
+
+Cada produto apresenta a melhor oferta válida atual, preço atual, menor histórico,
+variação diária, baseline, status da coleta, eventos de alerta e estado do bot.
+O histórico diário tem gráfico acessível e lista dos dias recentes; quando ainda
+não há coleta válida, o painel explica o motivo em vez de exibir números vazios.
+Consulte [docs/stage-9-history-experience.md](docs/stage-9-history-experience.md).
+
+Valide uma base legada sem gravar no banco novo:
+
+```powershell
+python manage.py import_legacy_sqlite `
+  --source data/radar_precos.db `
+  --dry-run
+```
+
+Para gravar, remova `--dry-run` e informe `--tenant UUID_DO_TENANT` somente após
+conferir tenant, backup, hash e contagens. O
+importador abre a origem em modo somente leitura, é idempotente pelo hash e não
+remove nem converte o SQLite original.
+
 ## Alertas do Telegram
+
+### Bot pessoal (Etapa 3)
+
+O painel `/painel/bot/` permite criar um bot pessoal pelo fluxo oficial de
+managed bots, sem copiar token. O servidor cifra a credencial, restringe o bot
+ao proprietário e registra um webhook com segredo próprio. Consulte
+[docs/stage-3-managed-bots.md](docs/stage-3-managed-bots.md) para configurar o
+bot gerenciador, validar a capacidade e executar os comandos de saúde/rotação.
+
+O manager e o bot de login OIDC são papéis separados. O fallback temporário só
+aceita credencial via variável de ambiente e nunca por argumento de CLI.
 
 Após criar um bot pelo `@BotFather`, envie `/start` para ele, configure o token e
 o Chat ID somente no `.env` e valide:
@@ -168,9 +336,9 @@ Oscilações menores ficam somente no SQLite. Quando várias regras são acionad
 os motivos são consolidados na mensagem da melhor oferta; não há um alerta por
 loja.
 
-As execuções iniciadas pelo Agendador também enviam um resumo curto com a melhor
-oferta válida de cada produto. Esse resumo operacional é independente dos
-alertas de preço e pode ser solicitado manualmente com `--notify-summary`.
+O resumo operacional é independente dos alertas de preço e pode ser solicitado
+manualmente com `--notify-summary`. O Agendador diário não usa essa opção: sem
+uma mudança relevante, nenhuma mensagem é enviada.
 
 ## Automação no Windows
 
@@ -198,12 +366,13 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass `
 A tarefa espera 2 minutos após o login para a rede estabilizar e também mantém
 uma execução diária às 21:05 caso o computador já esteja ligado. Ela aguarda a
 rede, executa assim que possível quando um horário for perdido, desperta o
-computador quando permitido pelo Windows, tenta novamente até três vezes e
-impede instâncias simultâneas.
+computador quando permitido pelo Windows e tenta novamente até três vezes. A
+fila persistida aplica idempotência diária, backoff e exclusão mútua entre
+workers.
 
-O arquivo `logs/scheduler.log` registra início, término e código de saída sem
-armazenar CEP ou credenciais. Execuções repetidas em menos de seis horas são
-ignoradas para evitar coleta e mensagem duplicadas.
+O arquivo `logs/scheduler.log` registra somente estados operacionais e códigos
+de saída, sem armazenar CEP ou credenciais. O banco registra o job e cada
+tentativa para auditoria.
 
 ## Análises e previsões
 
@@ -252,10 +421,30 @@ tests/              # testes unitários e de integração isolada
 ```powershell
 py -m unittest discover -s tests -v
 py -m compileall -q app tests
+python manage.py test tenancy monitoring
+python manage.py check
+python manage.py makemigrations --check --dry-run
 ```
 
 Os testes usam respostas estáticas ou objetos simulados. Eles não dependem de
 tokens reais e não devem chamar lojas ou Telegram.
+
+O gate de qualidade e segurança da Etapa 10, incluindo a jornada end-to-end
+controlada, o threat model e o comando de métricas/alertas, está descrito em
+[docs/stage-10-quality-security.md](docs/stage-10-quality-security.md).
+
+Para obter um snapshot operacional seguro:
+
+```powershell
+py -3.14 manage.py operational_status --json
+```
+
+O pacote de deploy da Etapa 11 inclui Compose, healthchecks, CI, backup com
+SHA-256, restore testado, homologação fechada e rollback. Consulte
+[docs/stage-11-deploy-beta.md](docs/stage-11-deploy-beta.md).
+
+Backup diário, retenção, restauração e resposta a incidentes estão detalhados
+em [docs/operations-recovery.md](docs/operations-recovery.md).
 
 ## Segurança e privacidade
 
@@ -265,6 +454,10 @@ tokens reais e não devem chamar lojas ou Telegram.
 - URLs, modelo, variante e vendedor são validados antes de aceitar uma oferta;
 - falhas de rede, parsing ou frete não viram preços válidos;
 - contribuições devem usar dados sintéticos em fixtures.
+
+A política pública está em `/privacidade/`; pessoas autenticadas podem excluir
+conta e dados locais em `/conta/excluir/`. A exclusão exige a frase de
+confirmação exibida na tela.
 
 Consulte [SECURITY.md](SECURITY.md) antes de reportar uma vulnerabilidade.
 

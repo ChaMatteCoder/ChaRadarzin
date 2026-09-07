@@ -175,6 +175,11 @@ manager habilitados por um Cloudflare Quick Tunnel.
 Quick Tunnels são temporários. Após reiniciar o computador ou o processo
 `cloudflared`, atualize `PUBLIC_BASE_URL`, `DJANGO_ALLOWED_HOSTS` e
 `DJANGO_CSRF_TRUSTED_ORIGINS`, recrie os containers, reconfigure o webhook do
-manager e altere o domínio do Login Widget no BotFather. A validação humana
-restante é concluir um login Telegram real pelo novo domínio HTTPS; credenciais
-e Telegram User IDs não devem ser compartilhados no chat.
+manager e altere o domínio do Login Widget no BotFather. Credenciais e Telegram
+User IDs não devem ser compartilhados no chat.
+
+Em 06/09/2026, a validação humana final também foi concluída: login Telegram,
+cadastro de produtos, comandos do bot pessoal e notificação administrativa de
+teste funcionaram no ambiente Docker. A notificação foi registrada como
+`ADMIN_TEST_NOTIFICATION_SENT` e, por projeto, não criou alerta, entrega ou
+histórico de preço falsos.
